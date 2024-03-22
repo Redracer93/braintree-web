@@ -74,6 +74,7 @@ function Venmo(options) {
     options.collectCustomerBillingAddress || false;
   this._collectCustomerShippingAddress =
     options.collectCustomerShippingAddress || false;
+  this._isFinalAmount = options.isFinalAmount || false;
   this._lineItems = options.lineItems;
   this._subTotalAmount = options.subTotalAmount;
   this._discountAmount = options.discountAmount;
@@ -298,6 +299,7 @@ Venmo.prototype._createVenmoPaymentContext = function (
     ) {
       return transactionDetails[detail] !== undefined; // eslint-disable-line no-undefined
     });
+
     promise = client
       .request({
         api: "graphQLApi",
@@ -308,6 +310,7 @@ Venmo.prototype._createVenmoPaymentContext = function (
               paymentMethodUsage: this._paymentMethodUsage,
               intent: "CONTINUE",
               customerClient: "MOBILE_WEB",
+              isFinalAmount: this._isFinalAmount,
               displayName: this._displayName,
               paysheetDetails: {
                 collectCustomerBillingAddress:
@@ -465,7 +468,7 @@ Venmo.prototype.getUrl = function () {
 };
 
 /**
- * Returns a boolean indicating whether the current browser supports Venmo as a payment method.
+ * Returns a boolean indicating whether the current browser supports Venmo as a payment method. Please note that iOS Chrome is not supported when the Venmo button is rendered in an iFrame.
  *
  * If `options.allowNewBrowserTab` is false when calling {@link module:braintree-web/venmo.create|venmo.create}, this method will return true only for browsers known to support returning from the Venmo app to the same browser tab. Currently, this is limited to iOS Safari and Android Chrome.
  * If `options.allowWebviews` is false when calling {@link module:braintree-web/venmo.create|venmo.create}, this method will return true only for mobile browsers that are not webviews.
@@ -723,6 +726,7 @@ Venmo.prototype._tokenizeWebLoginWithRedirect = function () {
         frameServiceInstance: self._frameServiceInstance,
         venmoUrl: url,
         debug: self._isDebug,
+        checkPaymentContextStatus: self._checkPaymentContextStatus.bind(self),
       })
       .then(function (payload) {
         analytics.sendEvent(
@@ -786,6 +790,50 @@ Venmo.prototype._checkPaymentContextStatusAndProcessResult = function (
 ) {
   var self = this;
 
+  return self._checkPaymentContextStatus().then(function (node) {
+    var resultStatus = node.status;
+
+    if (resultStatus !== self._venmoPaymentContextStatus) {
+      self._venmoPaymentContextStatus = resultStatus;
+
+      analytics.sendEvent(
+        self._createPromise,
+        "venmo.tokenize.web-login.status-change"
+      );
+
+      switch (resultStatus) {
+        case "APPROVED":
+          return Promise.resolve(node);
+        case "CANCELED":
+          return Promise.reject(
+            new BraintreeError(errors.VENMO_CUSTOMER_CANCELED)
+          );
+        case "FAILED":
+          return Promise.reject(
+            new BraintreeError(errors.VENMO_TOKENIZATION_FAILED)
+          );
+        default:
+      }
+    }
+
+    return new Promise(function (resolve, reject) {
+      if (retryCount < self._maxRetryCount) {
+        retryCount++;
+
+        return self
+          ._checkPaymentContextStatusAndProcessResult(retryCount)
+          .then(resolve)
+          .catch(reject);
+      }
+
+      return reject(new BraintreeError(errors.VENMO_TOKENIZATION_FAILED));
+    });
+  });
+};
+
+Venmo.prototype._checkPaymentContextStatus = function () {
+  var self = this;
+
   return self
     ._queryPaymentContextStatus(self._venmoPaymentContextId)
     .catch(function (networkError) {
@@ -799,43 +847,7 @@ Venmo.prototype._checkPaymentContextStatusAndProcessResult = function (
       );
     })
     .then(function (node) {
-      var resultStatus = node.status;
-
-      if (resultStatus !== self._venmoPaymentContextStatus) {
-        self._venmoPaymentContextStatus = resultStatus;
-
-        analytics.sendEvent(
-          self._createPromise,
-          "venmo.tokenize.web-login.status-change"
-        );
-
-        switch (resultStatus) {
-          case "APPROVED":
-            return Promise.resolve(node);
-          case "CANCELED":
-            return Promise.reject(
-              new BraintreeError(errors.VENMO_CUSTOMER_CANCELED)
-            );
-          case "FAILED":
-            return Promise.reject(
-              new BraintreeError(errors.VENMO_TOKENIZATION_FAILED)
-            );
-          default:
-        }
-      }
-
-      return new Promise(function (resolve, reject) {
-        if (retryCount < self._maxRetryCount) {
-          retryCount++;
-
-          return self
-            ._checkPaymentContextStatusAndProcessResult(retryCount)
-            .then(resolve)
-            .catch(reject);
-        }
-
-        return reject(new BraintreeError(errors.VENMO_TOKENIZATION_FAILED));
-      });
+      return Promise.resolve(node);
     });
 };
 

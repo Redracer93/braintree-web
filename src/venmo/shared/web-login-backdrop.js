@@ -3,6 +3,8 @@
 var frameService = require("../../lib/frame-service/external");
 var useMin = require("../../lib/use-min");
 var ExtendedPromise = require("@braintree/extended-promise");
+var errors = require("../shared/errors");
+var BraintreeError = require("../../lib/braintree-error");
 
 var VERSION = process.env.npm_package_version;
 var VENMO_LOGO_SVG =
@@ -30,6 +32,7 @@ function openPopup(options) {
   var venmoUrl = options.venmoUrl;
   var checkForStatusChange = options.checkForStatusChange;
   var cancelTokenization = options.cancelTokenization;
+  var checkPaymentContextStatus = options.checkPaymentContextStatus;
   var extendedPromise = new ExtendedPromise();
 
   document
@@ -44,7 +47,6 @@ function openPopup(options) {
       cancelTokenization();
       closeBackdrop();
     });
-
   frameServiceInstance.open({}, function (frameServiceErr) {
     var retryStartingCount = 1;
 
@@ -56,9 +58,26 @@ function openPopup(options) {
           extendedPromise.resolve(data);
         })
         .catch(function (statusCheckError) {
-          extendedPromise.reject(statusCheckError);
+          // We add this check here because at this point
+          // the status should not be in CREATED status.
+          // However, there is an edge case where if a buyer
+          // cancels in the popup, the popup might close itself
+          // before it can send the graphQL mutation to update its status.
+          // In these cases, the status will be stuck in CREATED status, and
+          // tokenization would fail, incorrectly throwing a tokenization error
+          // instead of informing the merchant that the customer canceled.
+          checkPaymentContextStatus().then(function (node) {
+            if (node.status === "CREATED") {
+              extendedPromise.reject(
+                new BraintreeError(errors.VENMO_CUSTOMER_CANCELED)
+              );
+            } else {
+              extendedPromise.reject(statusCheckError);
+            }
+          });
         });
     }
+
     frameServiceInstance.close();
     closeBackdrop();
   });
@@ -89,13 +108,14 @@ function getElementStyles() {
     "display: none;",
     "}",
     "#" + ELEMENT_IDS.backdrop + " {",
+    "z-index: 3141592632;",
     "cursor: pointer;",
     "position: fixed;",
     "top: 0;",
     "left: 0;",
     "bottom: 0;",
     "width: 100%;",
-    "background: rgba(0, 0, 0, 0.4);",
+    "background: rgba(0, 0, 0, 0.8);",
     "}",
   ];
   var backdropContainerStyles = [
@@ -236,6 +256,10 @@ function buildAndStyleElements() {
   backDropContentContainer.appendChild(cancelButton);
   backdropDiv.appendChild(backDropContentContainer);
   document.body.appendChild(backdropDiv);
+
+  backdropDiv.addEventListener("click", function (event) {
+    event.stopPropagation();
+  });
 }
 
 /**

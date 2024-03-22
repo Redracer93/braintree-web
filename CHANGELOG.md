@@ -1,5 +1,60 @@
 # CHANGELOG
 
+# 3.101.0
+
+- Venmo
+  - Add support for `isFinalAmount` flag to Venmo create
+- Package updates
+  - Updated @braintree/sanitize-url to 7.0.1
+
+# 3.100.0
+
+- 3D Secure
+  - Remove call to V1 modal as 3DS v1 is unsupported
+- Local Payment
+  - Add support for recurrent local payment
+
+# 3.99.2
+
+- Venmo
+  - Fix race condition in previous bug fix.
+
+# 3.99.1
+
+- Venmo
+  - Fix bug where the Venmo Desktop Popup would sometimes return a tokenization error when a customer canceled within the modal.
+- Package updates
+  - Replace `tomashanacek/gulp-envify` with `ladjs/gulp-envify` due to missing dependency (`tomashanacek/loose-envify`).
+
+# 3.99.0
+
+- Venmo
+  - Update `isBrowserSupported` to return true for iOS Chrome when `allowNewBrowserTab` is true and Venmo is not presented in an iFrame.
+
+# 3.98.0
+
+- Local Payment
+  - Add support for seamless/oneclick BLIK local payment
+
+# 3.97.4
+
+- Venmo
+  - Change overlay container to be on top of other page components and prevent click-through.
+
+# 3.97.3
+
+- JS Docs
+  - Venmo
+    - Add clarification to `isBrowserSupported` for iOS Chrome.
+
+# 3.97.2
+
+- JS Docs
+  - PayPal
+    - Add clarification to `updatePayment` options
+  - Apple Pay
+    - Updated `displayName` docs for `performValidation` to indicate that maximium length is 64 characters
+
 # 3.97.1
 
 - JS docs

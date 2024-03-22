@@ -24,6 +24,7 @@ describe("web-login-backdrop", () => {
     classListAddMock,
     classListRemoveMock,
     setupOptions,
+    mockPaymentContextStatus,
     openOptions;
 
   beforeEach(() => {
@@ -40,6 +41,7 @@ describe("web-login-backdrop", () => {
     mockClose = jest.fn();
     mockCancelTokenization = jest.fn();
     mockStatusCheck = jest.fn().mockResolvedValue();
+    mockPaymentContextStatus = jest.fn().mockResolvedValue();
     classListAddMock = jest.fn();
     eventListenerMock = jest.fn();
     classListRemoveMock = jest.fn();
@@ -69,6 +71,7 @@ describe("web-login-backdrop", () => {
       frameServiceInstance: mockFrameService,
       cancelTokenization: mockCancelTokenization,
       checkForStatusChange: mockStatusCheck,
+      checkPaymentContextStatus: mockPaymentContextStatus,
     };
   });
 
@@ -316,6 +319,7 @@ describe("web-login-backdrop", () => {
       const expectedRejectedValue = "some err";
 
       mockStatusCheck.mockRejectedValue(expectedRejectedValue);
+      mockPaymentContextStatus.mockResolvedValue({ status: "FAILED" });
 
       await openPopup(openOptions).catch((err) => {
         expect(err).toBe(expectedRejectedValue);
